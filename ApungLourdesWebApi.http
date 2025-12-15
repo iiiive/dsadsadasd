@@ -1,0 +1,6 @@
+@ApungLourdesWebApi_HostAddress = http://localhost:5276
+
+GET {{ApungLourdesWebApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
