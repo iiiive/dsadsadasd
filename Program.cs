@@ -1,4 +1,4 @@
-using ApungLourdesWebApi.Mappings;
+﻿using ApungLourdesWebApi.Mappings;
 using ApungLourdesWebApi.Models;
 using ApungLourdesWebApi.Repositories;
 using ApungLourdesWebApi.Services.Implementations;
@@ -28,7 +28,9 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IAmanuService, AmanuService>();
 builder.Services.AddScoped<IServiceScheduleService, ServiceScheduleService>();
 builder.Services.AddScoped<IDocumentRequestService, DocumentRequestService>();
-//builder.Services.AddScoped<IDonationService, DonationService>();
+
+// ✅ ADD THIS (Donation)
+builder.Services.AddScoped<IDonationService, DonationService>();
 
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
@@ -37,7 +39,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAngularClient",
         policy =>
         {
-            policy.WithOrigins("http://localhost:4200") // Angular dev server
+            policy.WithOrigins("http://localhost:4200")
                   .AllowAnyHeader()
                   .AllowAnyMethod();
         });
@@ -48,9 +50,7 @@ builder.Services.AddDataProtection()
         Path.Combine(builder.Environment.ContentRootPath, "keys")
     ));
 
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -65,7 +65,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
 
-            // These should match what you used to issue the token
             ValidIssuer = builder.Configuration["Jwt:Issuer"],
             ValidAudience = builder.Configuration["Jwt:Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(
@@ -78,14 +77,12 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// Use CORS before MapControllers
 app.UseCors("AllowAngularClient");
 
 // Enable static files from wwwroot
@@ -112,22 +109,7 @@ app.UseStaticFiles(new StaticFileOptions
     FileProvider = new PhysicalFileProvider(uploadsPath),
     RequestPath = "/uploads"
 });
-//app.UseStaticFiles(new StaticFileOptions
-//{
-//    FileProvider = new PhysicalFileProvider(
-//        Path.Combine(builder.Environment.ContentRootPath, "wwwroot")),
-//    RequestPath = ""
-//});
 
-//// Or more explicit if you want only "uploads":
-//app.UseStaticFiles(new StaticFileOptions
-//{
-//    FileProvider = new PhysicalFileProvider(
-//        Path.Combine(builder.Environment.ContentRootPath, "wwwroot", "uploads")),
-//    RequestPath = "/uploads"
-//});
-
-//app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 

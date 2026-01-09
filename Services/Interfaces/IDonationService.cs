@@ -4,10 +4,11 @@ namespace ApungLourdesWebApi.Services.Interfaces
 {
     public interface IDonationService
     {
-        Task<DocumentRequestDto> AddAsync(DocumentRequestDto dto);
+        Task<IEnumerable<DonationDto>> GetAllAsync();
+        Task<DonationDto?> GetByIdAsync(int id);
+
+        Task<DonationDto> AddAsync(int userId, CreateDonationDto dto);
+
         Task DeleteAsync(int id);
-        Task<IEnumerable<DocumentRequestDto>> GetAllAsync();
-        Task<DocumentRequestDto?> GetByIdAsync(int id);
-        Task<DocumentRequestDto?> UpdateAsync(int id, DocumentRequestDto dto);
     }
 }
