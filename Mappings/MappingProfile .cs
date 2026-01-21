@@ -8,24 +8,8 @@ namespace ApungLourdesWebApi.Mappings
     {
         public MappingProfile()
         {
+            // Users
             CreateMap<User, UserDto>().ReverseMap();
-            //CreateMap<User, UserDto>()
-            //    .ForMember(dest => dest.RoleName, opt => opt.MapFrom(src => src.Role.RoleName));
-
-            //CreateMap<Donation, DonationDto>()
-            //    .ForMember(dest => dest.UserFullName, opt => opt.MapFrom(src => src.User!.FullName));
-
-            //CreateMap<Amanu, AmanuDto>();
-            //CreateMap<Serviceschedule, ServiceScheduleDto>();
-            //CreateMap<Serviceschedulerequirement, ServiceScheduleRequirementDto>();
-            //CreateMap<Documentrequest, DocumentRequestDto>();
-
-            //// Reverse maps for create/update
-            //CreateMap<UserDto, User>();
-            //CreateMap<AmanuDto, Amanu>();
-            //CreateMap<ServiceScheduleDto, Serviceschedule>();
-            //CreateMap<ServiceScheduleRequirementDto, Serviceschedulerequirement>();
-            //CreateMap<DocumentRequestDto, Documentrequest>();
 
             // Amanu
             CreateMap<Amanu, AmanuDto>().ReverseMap();
@@ -38,6 +22,15 @@ namespace ApungLourdesWebApi.Mappings
 
             // DocumentRequests
             CreateMap<Documentrequest, DocumentRequestDto>().ReverseMap();
+
+            // ✅ Donations (ADD THIS)
+            // DonationDto should match your Donation model fields:
+            // DonationId, UserId, Amount, DonationType, ReferenceNo, Remarks, CreatedAt, etc.
+            CreateMap<Donation, DonationDto>().ReverseMap();
+
+            // ✅ Transactions (OPTIONAL but recommended if you also create TransactionDto)
+            // If you don't have TransactionDto, you can remove this part.
+            // CreateMap<Transaction, TransactionDto>().ReverseMap();
         }
     }
 }

@@ -2,6 +2,7 @@
 using ApungLourdesWebApi.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ApungLourdesWebApi.Controllers
 {
@@ -14,29 +15,33 @@ namespace ApungLourdesWebApi.Controllers
 
         public DonationController(IDonationService service) => _service = service;
 
+        // Admin can view all
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetAll() =>
-            Ok(await _service.GetAllAsync());
+        public async Task<ActionResult<IEnumerable<DonationDto>>> GetAll()
+            => Ok(await _service.GetAllAsync());
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<DocumentRequestDto>> GetById(int id)
+        public async Task<ActionResult<DonationDto>> GetById(int id)
         {
             var item = await _service.GetByIdAsync(id);
             return item == null ? NotFound() : Ok(item);
         }
 
+        // User submits donation
         [HttpPost]
-        public async Task<ActionResult<DocumentRequestDto>> Create(DocumentRequestDto dto)
+        public async Task<ActionResult<DonationDto>> Create([FromBody] CreateDonationDto dto)
         {
-            var item = await _service.AddAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
-        }
+            if (dto.Amount <= 0) return BadRequest("Amount must be greater than zero.");
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<DocumentRequestDto>> Update(int id, DocumentRequestDto dto)
-        {
-            var updated = await _service.UpdateAsync(id, dto);
-            return updated == null ? NotFound() : Ok(updated);
+            // Get userId from token
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                              ?? User.FindFirst("sub")?.Value;
+
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized("Invalid user token (no user id).");
+
+            var created = await _service.AddAsync(userId, dto);
+            return Ok(created);
         }
 
         [HttpDelete("{id}")]
