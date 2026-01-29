@@ -6,6 +6,8 @@ namespace ApungLourdesWebApi.Models
     {
         public int Id { get; set; }
 
+        public int? UserId { get; set; }
+
         public string ServiceType { get; set; } = null!;
 
         public string ClientFirstName { get; set; } = null!;
@@ -38,5 +40,10 @@ namespace ApungLourdesWebApi.Models
         public DateTime CreatedAt { get; set; }
 
         public DateTime? ModifiedAt { get; set; }
+
+        public bool IsDeleted { get; set; }
+        public DateTime? DeletedAt { get; set; }
+        public string? DeletedBy { get; set; }
+
     }
 }

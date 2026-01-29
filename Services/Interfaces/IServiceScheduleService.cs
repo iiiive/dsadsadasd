@@ -9,7 +9,10 @@ namespace ApungLourdesWebApi.Services.Interfaces
         Task<ServiceScheduleDto> AddAsync(ServiceScheduleDto dto);
         Task DeleteAsync(int id);
         Task<IEnumerable<ServiceScheduleDto>> GetAllAsync();
-        Task<ServiceScheduleDto?> GetByIdAsync(int id, bool includeRequirements);
+
+        // ✅ Give default value so controller can call GetByIdAsync(id) or GetByIdAsync(id, true)
+        Task<ServiceScheduleDto?> GetByIdAsync(int id, bool includeRequirements = false);
+
         Task<ServiceScheduleDto?> UpdateAsync(int id, ServiceScheduleDto dto);
 
         // Requirements

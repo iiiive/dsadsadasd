@@ -2,6 +2,7 @@
 using ApungLourdesWebApi.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ApungLourdesWebApi.Controllers
 {
@@ -12,11 +13,56 @@ namespace ApungLourdesWebApi.Controllers
     {
         private readonly IDocumentRequestService _service;
 
-        public DocumentRequestController(IDocumentRequestService service) => _service = service;
+        public DocumentRequestController(IDocumentRequestService service)
+        {
+            _service = service;
+        }
+
+        private bool TryGetUserId(out int userId)
+        {
+            var userIdStr =
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                User.FindFirst("nameid")?.Value ??
+                User.FindFirst("sub")?.Value ??
+                "";
+
+            return int.TryParse(userIdStr, out userId);
+        }
+
+        private bool IsAdmin()
+        {
+            var role =
+                User.FindFirst(ClaimTypes.Role)?.Value ??
+                User.FindFirst("role")?.Value ??
+                "";
+
+            return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+        }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetAll() =>
-            Ok(await _service.GetAllAsync());
+        public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetAll()
+        {
+            if (!IsAdmin())
+                return Forbid("Admins only.");
+
+            return Ok(await _service.GetAllAsync());
+        }
+
+        [HttpGet("my")]
+        public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetMy()
+        {
+            var userIdClaim =
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                User.FindFirst("nameid")?.Value ??
+                User.FindFirst("sub")?.Value ??
+                User.FindFirst("id")?.Value;
+
+            if (!int.TryParse(userIdClaim, out var userId))
+                return Unauthorized("Invalid user id in token.");
+
+            var list = await _service.GetByUserIdAsync(userId);
+            return Ok(list);
+        }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<DocumentRequestDto>> GetById(int id)
@@ -28,6 +74,11 @@ namespace ApungLourdesWebApi.Controllers
         [HttpPost]
         public async Task<ActionResult<DocumentRequestDto>> Create(DocumentRequestDto dto)
         {
+            if (!TryGetUserId(out int userId))
+                return Unauthorized("Invalid user id in token.");
+
+            dto.UserId = userId;
+
             var item = await _service.AddAsync(dto);
             return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
         }
@@ -39,11 +90,35 @@ namespace ApungLourdesWebApi.Controllers
             return updated == null ? NotFound() : Ok(updated);
         }
 
+        // ✅ SOFT DELETE (Admin only): sets Status="Deleted"
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (!IsAdmin())
+                return Forbid("Admins only.");
+
             await _service.DeleteAsync(id);
             return NoContent();
+        }
+
+        public class UpdateStatusRequest
+        {
+            public string Status { get; set; } = "";
+        }
+
+        [HttpPut("{id}/status")]
+        public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest body)
+        {
+            if (!IsAdmin())
+                return Forbid("Admins only.");
+
+            if (string.IsNullOrWhiteSpace(body.Status))
+                return BadRequest("Status is required.");
+
+            var updated = await _service.UpdateStatusAsync(id, body.Status.Trim());
+            if (updated == null) return NotFound();
+
+            return Ok(updated);
         }
     }
 }

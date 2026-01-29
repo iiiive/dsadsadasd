@@ -10,7 +10,13 @@ namespace ApungLourdesWebApi.Repositories
         Task<T?> UpdateAsync(T entity);
         Task<bool> DeleteAsync(int id);
 
+        
+
+
         // Add this to support querying by condition
         Task<T?> GetAsync(Expression<Func<T, bool>> predicate);
+        Task SaveAsync();
+
+
     }
 }

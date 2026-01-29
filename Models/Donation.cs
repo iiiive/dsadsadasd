@@ -13,6 +13,9 @@ public partial class Donation
 
     public string DonationType { get; set; } = null!;
 
+    // ✅ ADD THIS (exists in DB: CustomDonationType varchar(100) DEFAULT NULL)
+    public string? CustomDonationType { get; set; }
+
     public string? ReferenceNo { get; set; }
 
     public string? Remarks { get; set; }

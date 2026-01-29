@@ -6,9 +6,9 @@
 
         public int ServiceScheduleId { get; set; }
 
-        public string RequirementType { get; set; } = null!;
+        public string? RequirementType { get; set; }
+        public string? FilePath { get; set; }
 
-        public string FilePath { get; set; } = null!;
 
         public string CreatedBy { get; set; } = null!;
 

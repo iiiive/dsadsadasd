@@ -23,14 +23,8 @@ namespace ApungLourdesWebApi.Mappings
             // DocumentRequests
             CreateMap<Documentrequest, DocumentRequestDto>().ReverseMap();
 
-            // ✅ Donations (ADD THIS)
-            // DonationDto should match your Donation model fields:
-            // DonationId, UserId, Amount, DonationType, ReferenceNo, Remarks, CreatedAt, etc.
+            // Donations
             CreateMap<Donation, DonationDto>().ReverseMap();
-
-            // ✅ Transactions (OPTIONAL but recommended if you also create TransactionDto)
-            // If you don't have TransactionDto, you can remove this part.
-            // CreateMap<Transaction, TransactionDto>().ReverseMap();
         }
     }
 }

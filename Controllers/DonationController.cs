@@ -13,40 +13,89 @@ namespace ApungLourdesWebApi.Controllers
     {
         private readonly IDonationService _service;
 
-        public DonationController(IDonationService service) => _service = service;
+        public DonationController(IDonationService service)
+        {
+            _service = service;
+        }
 
-        // Admin can view all
+        // -----------------------------
+        // Helpers
+        // -----------------------------
+        private bool IsAdmin()
+        {
+            // supports both Role claim types
+            return User.IsInRole("Admin")
+                || User.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "Admin")
+                || User.Claims.Any(c => c.Type == "role" && c.Value == "Admin");
+        }
+
+        private bool TryGetUserId(out int userId)
+        {
+            userId = 0;
+
+            // Most common claim sources
+            var raw =
+                User.FindFirstValue("sub") ??                       // JWT standard subject
+                User.FindFirstValue(ClaimTypes.NameIdentifier) ??   // ASP.NET identity
+                User.FindFirstValue("UserId") ??                    // custom
+                User.FindFirstValue("userid");                      // custom alt
+
+            return int.TryParse(raw, out userId);
+        }
+
+        // -----------------------------
+        // Endpoints
+        // -----------------------------
+
+        // ✅ Admin can view all donations
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DonationDto>>> GetAll()
-            => Ok(await _service.GetAllAsync());
+        {
+            if (!IsAdmin())
+                return Forbid();
 
-        [HttpGet("{id}")]
+            var items = await _service.GetAllAsync();
+            return Ok(items);
+        }
+
+        // ✅ Admin can view any donation by id
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<DonationDto>> GetById(int id)
         {
+            if (!IsAdmin())
+                return Forbid();
+
             var item = await _service.GetByIdAsync(id);
             return item == null ? NotFound() : Ok(item);
         }
 
-        // User submits donation
+        // ✅ User submits donation (ties to logged-in UserId)
         [HttpPost]
         public async Task<ActionResult<DonationDto>> Create([FromBody] CreateDonationDto dto)
         {
-            if (dto.Amount <= 0) return BadRequest("Amount must be greater than zero.");
+            if (dto == null)
+                return BadRequest("Invalid payload.");
 
-            // Get userId from token
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                              ?? User.FindFirst("sub")?.Value;
+            if (dto.Amount <= 0)
+                return BadRequest("Amount must be greater than zero.");
 
-            if (!int.TryParse(userIdClaim, out var userId))
+            if (!TryGetUserId(out var userId))
                 return Unauthorized("Invalid user token (no user id).");
 
+            // ✅ Critical: pass userId to service so it sets Donations.UserId
             var created = await _service.AddAsync(userId, dto);
-            return Ok(created);
+
+            // Best practice response (still safe even if you keep Ok())
+            return CreatedAtAction(nameof(GetById), new { id = created.DonationId }, created);
         }
 
-        [HttpDelete("{id}")]
+        // ✅ Admin only delete
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
+            if (!IsAdmin())
+                return Forbid();
+
             await _service.DeleteAsync(id);
             return NoContent();
         }

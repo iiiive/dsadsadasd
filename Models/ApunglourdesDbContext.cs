@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
-using Pomelo.EntityFrameworkCore.MySql.Scaffolding.Internal;
 
 namespace ApungLourdesWebApi.Models;
 
@@ -17,24 +16,17 @@ public partial class ApunglourdesDbContext : DbContext
     }
 
     public virtual DbSet<Amanu> Amanus { get; set; }
-
     public virtual DbSet<Documentrequest> Documentrequests { get; set; }
-
     public virtual DbSet<Donation> Donations { get; set; }
-
     public virtual DbSet<Role> Roles { get; set; }
-
     public virtual DbSet<Serviceschedule> Serviceschedules { get; set; }
-
     public virtual DbSet<Serviceschedulerequirement> Serviceschedulerequirements { get; set; }
-
     public virtual DbSet<Transaction> Transactions { get; set; }
-
     public virtual DbSet<User> Users { get; set; }
 
-    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseMySql("server=127.0.0.1;port=3306;database=apunglourdes_db;user=root", Microsoft.EntityFrameworkCore.ServerVersion.Parse("10.4.32-mariadb"));
+    // ✅ REMOVE OnConfiguring
+    // You already set the connection string in Program.cs via AddDbContext()
+    // So keeping OnConfiguring will hardcode credentials and triggers the scaffolding warning.
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -240,6 +232,27 @@ public partial class ApunglourdesDbContext : DbContext
             entity.Property(e => e.ModifiedBy).HasColumnType("int(11)");
             entity.Property(e => e.PasswordHash).HasMaxLength(255);
             entity.Property(e => e.RoleId).HasColumnType("int(11)");
+
+            // ✅ THESE EXIST IN YOUR DB TABLE (make EF map them)
+            entity.Property(e => e.IsApproved)
+                .HasColumnName("IsApproved")
+                .HasColumnType("tinyint(1)")
+                .HasDefaultValue(false);
+
+            entity.Property(e => e.Status)
+                .HasColumnName("Status")
+                .HasMaxLength(20)
+                .HasDefaultValueSql("'Pending'");
+
+            entity.Property(e => e.CompleteAddress)
+                .HasColumnName("CompleteAddress")
+                .HasMaxLength(255)
+                .HasDefaultValue("");
+
+            entity.Property(e => e.PhoneNumber)
+                .HasColumnName("PhoneNumber")
+                .HasMaxLength(50)
+                .HasDefaultValue("");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .HasForeignKey(d => d.RoleId)

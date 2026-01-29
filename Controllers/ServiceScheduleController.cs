@@ -2,104 +2,169 @@
 using ApungLourdesWebApi.Services.Interfaces;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
+using System.Linq;
+using System.IO;
 
 namespace ApungLourdesWebApi.Controllers
 {
     [Authorize]
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class ServiceScheduleController : ControllerBase
     {
         private readonly IServiceScheduleService _service;
+        private readonly IWebHostEnvironment _env;
 
-        public ServiceScheduleController(IServiceScheduleService service) => _service = service;
+        public ServiceScheduleController(IServiceScheduleService service, IWebHostEnvironment env)
+        {
+            _service = service;
+            _env = env;
+        }
 
+        private int? GetUserIdFromToken()
+        {
+            var userIdClaim =
+                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
+                User.FindFirst("sub")?.Value;
+
+            return int.TryParse(userIdClaim, out int userId) ? userId : null;
+        }
+
+        // GET: /api/ServiceSchedule
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<ServiceScheduleDto>>> GetAll() =>
-            Ok(await _service.GetAllAsync());
-
-        [HttpGet("{id}")]
-        public async Task<ActionResult<ServiceScheduleDto>> GetById(int id, [FromQuery] bool includeRequirements = false)
+        public async Task<IActionResult> GetAll()
         {
-            var item = await _service.GetByIdAsync(id, includeRequirements);
-            return item == null ? NotFound() : Ok(item);
+            var data = await _service.GetAllAsync();
+            return Ok(data);
         }
 
+        // GET: /api/ServiceSchedule/5?includeRequirements=true
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetById(int id, [FromQuery] bool includeRequirements = false)
+        {
+            var data = await _service.GetByIdAsync(id, includeRequirements);
+            if (data == null) return NotFound();
+            return Ok(data);
+        }
+
+        // POST: /api/ServiceSchedule
         [HttpPost]
-        public async Task<ActionResult<ServiceScheduleDto>> Create(ServiceScheduleDto dto)
+        public async Task<IActionResult> Create([FromBody] ServiceScheduleDto dto)
         {
-            var item = await _service.AddAsync(dto);
-            return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+            var userId = GetUserIdFromToken();
+            if (userId == null) return Unauthorized("Invalid token.");
+
+            dto.UserId = userId.Value;
+
+            if (string.IsNullOrWhiteSpace(dto.Status))
+                dto.Status = "Pending";
+
+            var created = await _service.AddAsync(dto);
+
+            return CreatedAtAction(nameof(GetById), new { id = created.Id, includeRequirements = false }, created);
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<ServiceScheduleDto>> Update(int id, ServiceScheduleDto dto)
+        // PUT: /api/ServiceSchedule/5
+        [HttpPut("{id:int}")]
+        public async Task<IActionResult> Update(int id, [FromBody] ServiceScheduleDto dto)
         {
             var updated = await _service.UpdateAsync(id, dto);
-            return updated == null ? NotFound() : Ok(updated);
+            if (updated == null) return NotFound();
+            return Ok(updated);
         }
 
-        [HttpDelete("{id}")]
+        // PATCH: /api/ServiceSchedule/5/status
+        [HttpPatch("{id:int}/status")]
+        public async Task<IActionResult> UpdateStatus(int id, [FromBody] StatusUpdateDto body)
+        {
+            if (body == null || string.IsNullOrWhiteSpace(body.Status))
+                return BadRequest("Status is required.");
+
+            var existing = await _service.GetByIdAsync(id, includeRequirements: false);
+            if (existing == null) return NotFound();
+
+            existing.Status = body.Status.Trim();
+            existing.ModifiedBy = "admin";
+            existing.ModifiedAt = DateTime.UtcNow;
+
+            var updated = await _service.UpdateAsync(id, existing);
+            return Ok(updated);
+        }
+
+        // DELETE: /api/ServiceSchedule/5
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
             await _service.DeleteAsync(id);
-            return NoContent();
+            return Ok(new { message = "Schedule soft-deleted." });
         }
 
-        [HttpGet("{id}/requirements")]
-        public async Task<ActionResult<IEnumerable<ServiceScheduleRequirementDto>>> GetRequirements(int id)
+        // ==========================================================
+        // ✅ Wedding Requirement Photo Upload Endpoint (Swagger-safe)
+        // POST: /api/ServiceSchedule/{scheduleId}/requirements/upload
+        // Content-Type: multipart/form-data
+        // fields: file, requirementType
+        // ==========================================================
+        [HttpPost("{scheduleId:int}/requirements/upload")]
+        [RequestSizeLimit(20_000_000)]
+        public async Task<IActionResult> UploadRequirement(int scheduleId)
         {
-            return Ok(await _service.GetRequirementsAsync(id));
-        }
+            // ✅ accept both key styles
+            var file = Request.Form.Files.GetFile("File") ?? Request.Form.Files.GetFile("file");
+            var requirementType = Request.Form["RequirementType"].FirstOrDefault()
+                               ?? Request.Form["requirementType"].FirstOrDefault();
 
-        [HttpPost("{id}/requirements")]
-        public async Task<ActionResult<ServiceScheduleRequirementDto>> AddRequirement(int id, [FromBody] ServiceScheduleRequirementDto dto)
-        {
-            var saved = await _service.AddRequirementAsync(id, dto);
-            return CreatedAtAction(nameof(GetRequirements), new { id }, saved);
-        }
-
-        [HttpDelete("{id}/requirements/{reqId}")]
-        public async Task<IActionResult> DeleteRequirement(int id, int reqId)
-        {
-            var success = await _service.DeleteRequirementAsync(id, reqId);
-            if (!success) return NotFound();
-            return NoContent();
-        }
-
-        [HttpPost("{id}/requirements/upload")]
-        public async Task<IActionResult> UploadRequirement(int id, IFormFile file, [FromForm] string requirementType)
-        {
             if (file == null || file.Length == 0)
-                return BadRequest("No file uploaded.");
+                return BadRequest(new { message = "No file uploaded (expected key: File or file)." });
 
-            // Create uploads folder if not exists
-            var folderPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "requirements");
-            if (!Directory.Exists(folderPath))
-                Directory.CreateDirectory(folderPath);
+            if (string.IsNullOrWhiteSpace(requirementType))
+                return BadRequest(new { message = "RequirementType is missing (expected key: RequirementType or requirementType)." });
 
-            // Save file
-            var fileName = $"{Guid.NewGuid()}_{file.FileName}";
-            var filePath = Path.Combine(folderPath, fileName);
+            var allowedExt = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!allowedExt.Contains(ext))
+                return BadRequest(new { message = "Invalid file type. Allowed: JPG, PNG, WEBP." });
+
+            var uploadsRoot = Path.Combine(_env.WebRootPath ?? "wwwroot", "uploads", "schedules", scheduleId.ToString());
+            Directory.CreateDirectory(uploadsRoot);
+
+            var safeType = new string(requirementType.Trim().Where(char.IsLetterOrDigit).ToArray());
+            if (string.IsNullOrWhiteSpace(safeType)) safeType = "requirement";
+
+            var fileName = $"{safeType}_{DateTime.UtcNow:yyyyMMddHHmmssfff}_{Guid.NewGuid():N}{ext}";
+            var filePath = Path.Combine(uploadsRoot, fileName);
+
             using (var stream = new FileStream(filePath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            // Save DB record
-            var requirement = new ServiceScheduleRequirementDto
+            var relativeUrl = $"/uploads/schedules/{scheduleId}/{fileName}";
+            var absoluteUrl = $"{Request.Scheme}://{Request.Host}{relativeUrl}";
+
+            return Ok(new
             {
-                ServiceScheduleId = id,
-                RequirementType = requirementType, // "couple_picture" | "valid_id" | "certificate"
-                FilePath = $"/uploads/requirements/{fileName}",
-                CreatedBy = "test-user",
-                CreatedAt = DateTime.UtcNow
-            };
-
-            await _service.AddRequirementAsync(id, requirement);           
-
-            return Ok(requirement);
+                scheduleId,
+                requirementType,
+                fileName,
+                url = absoluteUrl,
+                path = relativeUrl
+            });
         }
 
+
+    }
+
+    public class StatusUpdateDto
+    {
+        public string? Status { get; set; }
+    }
+
+    // ✅ Swagger-friendly form model for file upload
+    public class RequirementUploadForm
+    {
+        public IFormFile File { get; set; } = default!;
+        public string RequirementType { get; set; } = string.Empty;
     }
 }

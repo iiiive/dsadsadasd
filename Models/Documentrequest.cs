@@ -44,4 +44,11 @@ public partial class Documentrequest
     public string CreatedBy { get; set; } = null!;
 
     public string? ModifiedBy { get; set; }
+
+    public string Status { get; set; } = "Pending";
+
+    public int? UserId { get; set; }   // ✅ allow existing rows
+
+
+
 }

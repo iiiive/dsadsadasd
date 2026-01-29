@@ -25,5 +25,7 @@ namespace ApungLourdesWebApi.DTOs
         public virtual ICollection<Donation> Donations { get; set; } = new List<Donation>();
 
         public virtual Role Role { get; set; } = null!;
+
+
     }
 }

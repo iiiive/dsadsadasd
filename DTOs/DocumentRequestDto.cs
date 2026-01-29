@@ -4,6 +4,12 @@
     {
         public int Id { get; set; }
 
+        public int? UserId { get; set; }
+
+
+
+
+
         public string DocumentType { get; set; } = null!;
 
         public string? FirstName { get; set; }
@@ -41,5 +47,9 @@
         public string CreatedBy { get; set; } = null!;
 
         public string? ModifiedBy { get; set; }
+
+        public string Status { get; set; } = "Pending";
+
+
     }
 }
