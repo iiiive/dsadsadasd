@@ -53,17 +53,29 @@ namespace ApungLourdesWebApi.Services.Implementations
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-            var roleName = user.RoleId == 1 ? "Admin" : "User";
+            // ✅ FIX: Support SuperAdmin (RoleId = 3)
+            var roleName = user.RoleId switch
+            {
+                1 => "Admin",
+                2 => "User",
+                3 => "SuperAdmin",
+                _ => "User"
+            };
 
             var claims = new List<Claim>
             {
-                // ✅ best practice: include BOTH sub + nameidentifier so controllers can read either
+                // ✅ include BOTH sub + nameidentifier so controllers can read either
                 new Claim(JwtRegisteredClaimNames.Sub, user.UserId.ToString()),
                 new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
 
                 new Claim(ClaimTypes.Name, user.FullName ?? ""),
                 new Claim(ClaimTypes.Email, user.Email ?? ""),
+
+                // ✅ standard .NET role claim (your Angular already supports this)
                 new Claim(ClaimTypes.Role, roleName),
+
+                // ✅ optional convenience claims
+                new Claim("role", roleName),
                 new Claim("roleId", user.RoleId.ToString())
             };
 

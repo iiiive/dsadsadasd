@@ -29,20 +29,22 @@ namespace ApungLourdesWebApi.Controllers
             return int.TryParse(userIdStr, out userId);
         }
 
-        private bool IsAdmin()
+        private bool IsAdminOrSuperAdmin()
         {
             var role =
                 User.FindFirst(ClaimTypes.Role)?.Value ??
                 User.FindFirst("role")?.Value ??
+                User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value ??
                 "";
 
-            return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
         }
 
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetAll()
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid("Admins only.");
 
             return Ok(await _service.GetAllAsync());
@@ -90,11 +92,11 @@ namespace ApungLourdesWebApi.Controllers
             return updated == null ? NotFound() : Ok(updated);
         }
 
-        // ✅ SOFT DELETE (Admin only): sets Status="Deleted"
+        // ✅ SOFT DELETE (Admin/SuperAdmin)
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid("Admins only.");
 
             await _service.DeleteAsync(id);
@@ -109,7 +111,7 @@ namespace ApungLourdesWebApi.Controllers
         [HttpPut("{id}/status")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest body)
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid("Admins only.");
 
             if (string.IsNullOrWhiteSpace(body.Status))

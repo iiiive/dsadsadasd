@@ -18,11 +18,11 @@ namespace ApungLourdesWebApi.Controllers
             _userRepo = userRepo;
         }
 
-        // ✅ GET: /api/admin/users/pending  -> show ONLY Pending
+        // ✅ GET: /api/admin/users/pending
         [HttpGet("pending")]
         public async Task<IActionResult> GetPendingUsers()
         {
-            if (!IsAdmin()) return Forbid();
+            if (!IsAdminOrSuperAdmin()) return Forbid();
 
             var users = await _userRepo.GetAllAsync();
 
@@ -47,7 +47,7 @@ namespace ApungLourdesWebApi.Controllers
         [HttpPut("{id:int}/approve")]
         public async Task<IActionResult> ApproveUser(int id)
         {
-            if (!IsAdmin()) return Forbid();
+            if (!IsAdminOrSuperAdmin()) return Forbid();
 
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound(new { message = "User not found." });
@@ -65,25 +65,25 @@ namespace ApungLourdesWebApi.Controllers
         [HttpPut("{id:int}/decline")]
         public async Task<IActionResult> DeclineUser(int id)
         {
-            if (!IsAdmin()) return Forbid();
+            if (!IsAdminOrSuperAdmin()) return Forbid();
 
             var user = await _userRepo.GetByIdAsync(id);
             if (user == null) return NotFound(new { message = "User not found." });
 
-            // ✅ HARD DELETE
             await _userRepo.DeleteAsync(id);
-
             return Ok(new { message = "User declined and deleted." });
         }
 
-        private bool IsAdmin()
+        private bool IsAdminOrSuperAdmin()
         {
             var role =
                 User.FindFirst(ClaimTypes.Role)?.Value ??
                 User.FindFirst("role")?.Value ??
-                User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+                User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value ??
+                "";
 
-            return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase);
+            return role.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

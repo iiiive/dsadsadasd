@@ -23,8 +23,16 @@ namespace ApungLourdesWebApi.Services.Implementations
             _mapper = mapper;
         }
 
+        // ✅ FIX: Use EF query directly (avoids generic repo mapping pitfalls)
         public async Task<IEnumerable<DocumentRequestDto>> GetAllAsync()
-            => _mapper.Map<IEnumerable<DocumentRequestDto>>(await _repo.GetAllAsync());
+        {
+            var list = await _db.Documentrequests
+                .OrderByDescending(x => x.Id)
+                .ToListAsync();
+
+            // ✅ map after materializing
+            return _mapper.Map<IEnumerable<DocumentRequestDto>>(list);
+        }
 
         public async Task<IEnumerable<DocumentRequestDto>> GetByUserIdAsync(int userId)
         {
@@ -38,7 +46,7 @@ namespace ApungLourdesWebApi.Services.Implementations
 
         public async Task<DocumentRequestDto?> GetByIdAsync(int id)
         {
-            var entity = await _repo.GetByIdAsync(id);
+            var entity = await _db.Documentrequests.FirstOrDefaultAsync(x => x.Id == id);
             return entity == null ? null : _mapper.Map<DocumentRequestDto>(entity);
         }
 
@@ -47,6 +55,7 @@ namespace ApungLourdesWebApi.Services.Implementations
             var entity = _mapper.Map<Documentrequest>(dto);
 
             entity.Status = "Pending";
+            entity.CreatedAt = DateTime.UtcNow;
             entity.ModifiedAt = DateTime.UtcNow;
 
             var added = await _repo.AddAsync(entity);
@@ -55,14 +64,14 @@ namespace ApungLourdesWebApi.Services.Implementations
 
         public async Task<DocumentRequestDto?> UpdateAsync(int id, DocumentRequestDto dto)
         {
-            var entity = await _repo.GetByIdAsync(id);
+            var entity = await _db.Documentrequests.FirstOrDefaultAsync(x => x.Id == id);
             if (entity == null) return null;
 
             _mapper.Map(dto, entity);
             entity.ModifiedAt = DateTime.UtcNow;
 
-            var updated = await _repo.UpdateAsync(entity);
-            return _mapper.Map<DocumentRequestDto>(updated);
+            await _db.SaveChangesAsync();
+            return _mapper.Map<DocumentRequestDto>(entity);
         }
 
         public async Task<DocumentRequestDto?> UpdateStatusAsync(int id, string status)
@@ -77,7 +86,6 @@ namespace ApungLourdesWebApi.Services.Implementations
             return _mapper.Map<DocumentRequestDto>(entity);
         }
 
-        // ✅ SOFT DELETE: do NOT remove DB record
         public async Task DeleteAsync(int id)
         {
             var entity = await _db.Documentrequests.FirstOrDefaultAsync(x => x.Id == id);
@@ -88,6 +96,5 @@ namespace ApungLourdesWebApi.Services.Implementations
 
             await _db.SaveChangesAsync();
         }
-
     }
 }

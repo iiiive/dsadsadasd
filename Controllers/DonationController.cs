@@ -18,58 +18,55 @@ namespace ApungLourdesWebApi.Controllers
             _service = service;
         }
 
-        // -----------------------------
-        // Helpers
-        // -----------------------------
-        private bool IsAdmin()
+        private bool IsAdminOrSuperAdmin()
         {
-            // supports both Role claim types
-            return User.IsInRole("Admin")
-                || User.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "Admin")
-                || User.Claims.Any(c => c.Type == "role" && c.Value == "Admin");
+            // supports standard + custom
+            var role =
+                User.FindFirstValue(ClaimTypes.Role) ??
+                User.FindFirstValue("role") ??
+                User.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") ??
+                "";
+
+            return role.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase);
         }
 
         private bool TryGetUserId(out int userId)
         {
             userId = 0;
 
-            // Most common claim sources
             var raw =
-                User.FindFirstValue("sub") ??                       // JWT standard subject
-                User.FindFirstValue(ClaimTypes.NameIdentifier) ??   // ASP.NET identity
-                User.FindFirstValue("UserId") ??                    // custom
-                User.FindFirstValue("userid");                      // custom alt
+                User.FindFirstValue("sub") ??
+                User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                User.FindFirstValue("UserId") ??
+                User.FindFirstValue("userid");
 
             return int.TryParse(raw, out userId);
         }
 
-        // -----------------------------
-        // Endpoints
-        // -----------------------------
-
-        // ✅ Admin can view all donations
+        // ✅ Admin/SuperAdmin can view all donations
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DonationDto>>> GetAll()
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid();
 
             var items = await _service.GetAllAsync();
             return Ok(items);
         }
 
-        // ✅ Admin can view any donation by id
+        // ✅ Admin/SuperAdmin can view any donation by id
         [HttpGet("{id:int}")]
         public async Task<ActionResult<DonationDto>> GetById(int id)
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid();
 
             var item = await _service.GetByIdAsync(id);
             return item == null ? NotFound() : Ok(item);
         }
 
-        // ✅ User submits donation (ties to logged-in UserId)
+        // ✅ User submits donation
         [HttpPost]
         public async Task<ActionResult<DonationDto>> Create([FromBody] CreateDonationDto dto)
         {
@@ -82,18 +79,15 @@ namespace ApungLourdesWebApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized("Invalid user token (no user id).");
 
-            // ✅ Critical: pass userId to service so it sets Donations.UserId
             var created = await _service.AddAsync(userId, dto);
-
-            // Best practice response (still safe even if you keep Ok())
             return CreatedAtAction(nameof(GetById), new { id = created.DonationId }, created);
         }
 
-        // ✅ Admin only delete
+        // ✅ Admin/SuperAdmin only delete
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
-            if (!IsAdmin())
+            if (!IsAdminOrSuperAdmin())
                 return Forbid();
 
             await _service.DeleteAsync(id);

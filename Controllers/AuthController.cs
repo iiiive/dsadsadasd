@@ -73,7 +73,8 @@ namespace ApungLourdesWebApi.Controllers
             var user = new User
             {
                 FullName = dto.FullName.Trim(),
-                Email = dto.Email.Trim(),
+                Email = dto.Email.Trim().ToLowerInvariant(),
+
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
 
                 RoleId = dto.RoleId,     // User or Admin
