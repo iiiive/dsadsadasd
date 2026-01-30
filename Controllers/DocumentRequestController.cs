@@ -18,29 +18,35 @@ namespace ApungLourdesWebApi.Controllers
             _service = service;
         }
 
+        // ✅ more robust: supports multiple claim keys
         private bool TryGetUserId(out int userId)
         {
-            var userIdStr =
-                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
-                User.FindFirst("nameid")?.Value ??
-                User.FindFirst("sub")?.Value ??
-                "";
+            userId = 0;
 
-            return int.TryParse(userIdStr, out userId);
+            var raw =
+                User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                User.FindFirstValue("nameid") ??
+                User.FindFirstValue("sub") ??
+                User.FindFirstValue("id") ??
+                User.FindFirstValue("userid") ??
+                User.FindFirstValue("UserId");
+
+            return int.TryParse(raw, out userId);
         }
 
         private bool IsAdminOrSuperAdmin()
         {
             var role =
-                User.FindFirst(ClaimTypes.Role)?.Value ??
-                User.FindFirst("role")?.Value ??
-                User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value ??
+                User.FindFirstValue(ClaimTypes.Role) ??
+                User.FindFirstValue("role") ??
+                User.FindFirstValue("http://schemas.microsoft.com/ws/2008/06/identity/claims/role") ??
                 "";
 
-            return string.Equals(role, "Admin", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase);
+            return role.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                || role.Equals("SuperAdmin", StringComparison.OrdinalIgnoreCase);
         }
 
+        // ✅ Admin/SuperAdmin: view all
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetAll()
         {
@@ -50,50 +56,77 @@ namespace ApungLourdesWebApi.Controllers
             return Ok(await _service.GetAllAsync());
         }
 
+        // ✅ User: view own
         [HttpGet("my")]
         public async Task<ActionResult<IEnumerable<DocumentRequestDto>>> GetMy()
         {
-            var userIdClaim =
-                User.FindFirst(ClaimTypes.NameIdentifier)?.Value ??
-                User.FindFirst("nameid")?.Value ??
-                User.FindFirst("sub")?.Value ??
-                User.FindFirst("id")?.Value;
-
-            if (!int.TryParse(userIdClaim, out var userId))
-                return Unauthorized("Invalid user id in token.");
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Invalid user id in token." });
 
             var list = await _service.GetByUserIdAsync(userId);
             return Ok(list);
         }
 
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<ActionResult<DocumentRequestDto>> GetById(int id)
         {
             var item = await _service.GetByIdAsync(id);
             return item == null ? NotFound() : Ok(item);
         }
 
+        // ✅ Create (any logged-in user)
         [HttpPost]
-        public async Task<ActionResult<DocumentRequestDto>> Create(DocumentRequestDto dto)
+        public async Task<ActionResult<DocumentRequestDto>> Create([FromBody] DocumentRequestDto dto)
         {
-            if (!TryGetUserId(out int userId))
-                return Unauthorized("Invalid user id in token.");
+            // ApiController will auto 400 on invalid modelstate,
+            // but we want clearer message.
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Invalid payload.", errors = ModelState });
 
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Invalid user id in token." });
+
+            // ✅ attach ownership
             dto.UserId = userId;
+
+            // ✅ set safe defaults so DB-required fields won't be null
+            dto.DocumentType = (dto.DocumentType ?? "").Trim();
+            dto.EmailAddress = (dto.EmailAddress ?? "").Trim();
+            dto.ContactPhone = (dto.ContactPhone ?? "").Trim();
+            dto.CreatedBy = string.IsNullOrWhiteSpace(dto.CreatedBy) ? "user" : dto.CreatedBy.Trim();
+            dto.ModifiedBy = string.IsNullOrWhiteSpace(dto.ModifiedBy) ? null : dto.ModifiedBy.Trim();
+
+            if (string.IsNullOrWhiteSpace(dto.DocumentType))
+                return BadRequest(new { message = "DocumentType is required." });
+
+            if (string.IsNullOrWhiteSpace(dto.EmailAddress))
+                return BadRequest(new { message = "EmailAddress is required." });
+
+            // ✅ default status
+            if (string.IsNullOrWhiteSpace(dto.Status))
+                dto.Status = "Pending";
+
+            // ✅ timestamps (service will also set, but safe here)
+            if (dto.CreatedAt == default)
+                dto.CreatedAt = DateTime.UtcNow;
+            dto.ModifiedAt = DateTime.UtcNow;
 
             var item = await _service.AddAsync(dto);
             return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
         }
 
-        [HttpPut("{id}")]
-        public async Task<ActionResult<DocumentRequestDto>> Update(int id, DocumentRequestDto dto)
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<DocumentRequestDto>> Update(int id, [FromBody] DocumentRequestDto dto)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Invalid payload.", errors = ModelState });
+
             var updated = await _service.UpdateAsync(id, dto);
             return updated == null ? NotFound() : Ok(updated);
         }
 
         // ✅ SOFT DELETE (Admin/SuperAdmin)
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {
             if (!IsAdminOrSuperAdmin())
@@ -108,14 +141,14 @@ namespace ApungLourdesWebApi.Controllers
             public string Status { get; set; } = "";
         }
 
-        [HttpPut("{id}/status")]
+        [HttpPut("{id:int}/status")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest body)
         {
             if (!IsAdminOrSuperAdmin())
                 return Forbid("Admins only.");
 
-            if (string.IsNullOrWhiteSpace(body.Status))
-                return BadRequest("Status is required.");
+            if (body == null || string.IsNullOrWhiteSpace(body.Status))
+                return BadRequest(new { message = "Status is required." });
 
             var updated = await _service.UpdateStatusAsync(id, body.Status.Trim());
             if (updated == null) return NotFound();
