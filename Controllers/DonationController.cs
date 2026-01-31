@@ -23,7 +23,6 @@ namespace ApungLourdesWebApi.Controllers
         // -----------------------------
         private bool IsAdmin()
         {
-            // supports both Role claim types
             return User.IsInRole("Admin")
                 || User.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "Admin")
                 || User.Claims.Any(c => c.Type == "role" && c.Value == "Admin");
@@ -33,12 +32,11 @@ namespace ApungLourdesWebApi.Controllers
         {
             userId = 0;
 
-            // Most common claim sources
             var raw =
-                User.FindFirstValue("sub") ??                       // JWT standard subject
-                User.FindFirstValue(ClaimTypes.NameIdentifier) ??   // ASP.NET identity
-                User.FindFirstValue("UserId") ??                    // custom
-                User.FindFirstValue("userid");                      // custom alt
+                User.FindFirstValue("sub") ??
+                User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+                User.FindFirstValue("UserId") ??
+                User.FindFirstValue("userid");
 
             return int.TryParse(raw, out userId);
         }
@@ -47,7 +45,6 @@ namespace ApungLourdesWebApi.Controllers
         // Endpoints
         // -----------------------------
 
-        // ✅ Admin can view all donations
         [HttpGet]
         public async Task<ActionResult<IEnumerable<DonationDto>>> GetAll()
         {
@@ -58,7 +55,6 @@ namespace ApungLourdesWebApi.Controllers
             return Ok(items);
         }
 
-        // ✅ Admin can view any donation by id
         [HttpGet("{id:int}")]
         public async Task<ActionResult<DonationDto>> GetById(int id)
         {
@@ -69,7 +65,6 @@ namespace ApungLourdesWebApi.Controllers
             return item == null ? NotFound() : Ok(item);
         }
 
-        // ✅ User submits donation (ties to logged-in UserId)
         [HttpPost]
         public async Task<ActionResult<DonationDto>> Create([FromBody] CreateDonationDto dto)
         {
@@ -82,14 +77,35 @@ namespace ApungLourdesWebApi.Controllers
             if (!TryGetUserId(out var userId))
                 return Unauthorized("Invalid user token (no user id).");
 
-            // ✅ Critical: pass userId to service so it sets Donations.UserId
             var created = await _service.AddAsync(userId, dto);
-
-            // Best practice response (still safe even if you keep Ok())
             return CreatedAtAction(nameof(GetById), new { id = created.DonationId }, created);
         }
 
-        // ✅ Admin only delete
+        // ✅ NEW: PUT for Edit (Admin only)
+        [HttpPut("{id:int}")]
+        public async Task<ActionResult<DonationDto>> Update(int id, [FromBody] UpdateDonationDto dto)
+        {
+            if (!IsAdmin())
+                return Forbid();
+
+            if (dto == null)
+                return BadRequest("Invalid payload.");
+
+            if (dto.Amount <= 0)
+                return BadRequest("Amount must be greater than zero.");
+
+            try
+            {
+                var updated = await _service.UpdateAsync(id, dto);
+                if (updated == null) return NotFound();
+                return Ok(updated);
+            }
+            catch (ArgumentException ex)
+            {
+                return BadRequest(ex.Message);
+            }
+        }
+
         [HttpDelete("{id:int}")]
         public async Task<IActionResult> Delete(int id)
         {

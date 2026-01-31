@@ -9,6 +9,9 @@ namespace ApungLourdesWebApi.Services.Interfaces
 
         Task<DonationDto> AddAsync(int userId, CreateDonationDto dto);
 
+        // ✅ NEW (for PUT edit)
+        Task<DonationDto?> UpdateAsync(int id, UpdateDonationDto dto);
+
         Task DeleteAsync(int id);
     }
 }

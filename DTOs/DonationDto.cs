@@ -26,20 +26,20 @@
     // ----------------------------
     public class CreateDonationDto
     {
-        // REQUIRED
         public decimal Amount { get; set; }
-
-        // REQUIRED: matches DB column DonationType
-        // e.g. "Offering", "Tithe", "Other"
         public string DonationType { get; set; } = null!;
-
-        // OPTIONAL: only used when DonationType == "Other"
         public string? CustomDonationType { get; set; }
-
-        // OPTIONAL
         public string? ReferenceNo { get; set; }
+        public string? Remarks { get; set; }
+    }
 
-        // OPTIONAL: maps to Remarks column
+    // ----------------------------
+    // ✅ NEW: What ADMIN updates (Edit modal)
+    // Only allow safe fields to be edited
+    // ----------------------------
+    public class UpdateDonationDto
+    {
+        public decimal Amount { get; set; }
         public string? Remarks { get; set; }
     }
 }

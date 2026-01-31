@@ -51,9 +51,6 @@ namespace ApungLourdesWebApi.Services.Implementations
                 ? $"AUTO-{Guid.NewGuid():N}".ToUpper()
                 : dto.ReferenceNo!.Trim();
 
-            // -----------------------
-            // 1) Insert Donation
-            // -----------------------
             var donation = new Donation
             {
                 UserId = userId,
@@ -68,18 +65,13 @@ namespace ApungLourdesWebApi.Services.Implementations
             };
 
             _db.Donations.Add(donation);
-            await _db.SaveChangesAsync(); // get DonationId
+            await _db.SaveChangesAsync();
 
-            // -----------------------
-            // 2) Insert Transaction
-            // -----------------------
-            // dto.PaymentMethod was removed, so set a safe default.
-            // Change "GCash" if your system uses another default.
             var tx = new Transaction
             {
                 DonationId = donation.DonationId,
-                PaymentMethod = "GCash",     // ✅ default (since DTO removed it)
-                ReferenceNo = safeRefNo,     // ✅ NOT NULL-safe
+                PaymentMethod = "GCash",
+                ReferenceNo = safeRefNo,
                 Status = "Pending",
                 CreatedAt = DateTime.UtcNow
             };
@@ -90,12 +82,28 @@ namespace ApungLourdesWebApi.Services.Implementations
             return _mapper.Map<DonationDto>(donation);
         }
 
+        // ✅ NEW: Update for Edit Modal
+        public async Task<DonationDto?> UpdateAsync(int id, UpdateDonationDto dto)
+        {
+            var donation = await _db.Donations.FirstOrDefaultAsync(d => d.DonationId == id);
+            if (donation == null) return null;
+
+            if (dto.Amount <= 0)
+                throw new ArgumentException("Amount must be greater than zero.");
+
+            donation.Amount = dto.Amount;
+            donation.Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim();
+
+            await _db.SaveChangesAsync();
+
+            return _mapper.Map<DonationDto>(donation);
+        }
+
         public async Task DeleteAsync(int id)
         {
             var donation = await _db.Donations.FirstOrDefaultAsync(d => d.DonationId == id);
             if (donation == null) return;
 
-            // delete related transactions first
             var txs = await _db.Transactions.Where(t => t.DonationId == id).ToListAsync();
             _db.Transactions.RemoveRange(txs);
 
